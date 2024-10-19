@@ -1,65 +1,39 @@
-import re
-
-from pandas import DataFrame
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-# dung để ngưng đọng thời gian
-import time
+import scrapy
 import pandas as pd
-import re
 
-#tạo dataframe rộng
-d = pd.DataFrame({'name': [], 'birth': [], 'death': [], 'nationality': []})
+class DienMayXanhSpider(scrapy.Spider):
+    name = "dienmayxanh"
+    start_urls = ['https://www.dienmayxanh.com/']
 
-#khởi tạo webdriver
-driver = webdriver.Chrome()
+    def parse(self, response):
+        # Chọn các sản phẩm trong trang
+        products = response.css('div.product-item')  # Thay đổi selector cho đúng
 
-# mở trang
-url = "https://en.wikipedia.org/wiki/Edvard_Munch"
-driver.get(url)
+        for product in products:
+            # Lấy thông tin cần thiết
+            yield {
+                'id': product.css('::attr(data-id)').get(),  # Chỉnh sửa selector cho đúng
+                'name': product.css('h3.product-title::text').get(),
+                'price': product.css('span.price::text').get(),
+                'rating_average': product.css('span.rating-average::text').get(),
+                'review_count': product.css('span.review-count::text').get(),
+                'quantity_sold': product.css('span.quantity-sold::text').get(),
+                'quantity_sold_1weeks': product.css('span.quantity-sold-1weeks::text').get(),
+                'product_categories': product.css('span.product-categories::text').get(),
+                'shop_categories': product.css('span.shop-categories::text').get(),
+                'Name_Shop': product.css('span.name-shop::text').get(),
+                'Year_Joined': product.css('span.year-joined::text').get(),
+                'Followers': product.css('span.followers::text').get(),
+                'Chat_Response': product.css('span.chat-response::text').get(),
+                'Reviews': product.css('div.reviews::text').get(),
+            }
 
-#đợi 2 giây
-time.sleep(2)
+        # Tiếp theo, kiểm tra xem có trang tiếp theo không và tiếp tục thu thập dữ liệu
+        next_page = response.css('a.next-page::attr(href)').get()  # Chỉnh sửa selector cho đúng
+        if next_page:
+            yield response.follow(next_page, self.parse)
 
-#Lấy tên của họa sĩ
-try:
-    name = driver.find_element(By.TAG_NAME, "h1").text
-except:
-    name = ""
-
-#lấy ngày sinh
-try:
-    birth_element = driver.find_element(By.XPATH, "//th[text()='Born']/following-sibling::td")
-    birth = birth_element.text
-    birth = re.findall(r'[0-9]+\s+[A-Za-z]+\s+[0-9]{4}', birth)[0]
-except:
-    birth = ""
-
-#lấy ngày mất
-try:
-    death_element = driver.find_element(By.XPATH, "//th[text()='Died']/following-sibling::td")
-    death = death_element.text
-    death = re.findall(r'[0-9]+\s+[A-Za-z]+\s+[0-9]{4}', death)[0]
-except:
-    death= ""
-
-    # lấy ngày mất
-try:
-    nationality_element = driver.find_element(By.XPATH, "//th[text()='Nationality']/following-sibling::td")
-    nationality = nationality_element.text
-except:
-    nationality = ""
-
-# tạo dictionary thông tin họa sĩ
-painter = {'name' : name, 'birth' : birth, 'death' : death, 'nationality' : nationality}
-
-#chuyển đổi dictionary thành DâtFrame
-painter_df = pd.DataFrame([painter])
-#thêm thông tin vào DF chính
-d = pd.concat([d,painter_df],ignore_index=True)
-
-print(d)
-
-
-#đóng webdriver
-driver.quit()
+    def close(self, reason):
+        # Xuất dữ liệu ra file Excel
+        df = pd.DataFrame(self.crawler.stats.get_value('item_scraped_count'))  # Tạo DataFrame từ kết quả thu thập
+        df.to_excel('dienmayxanh_products.xlsx', index=False)
